@@ -1,7 +1,7 @@
 <#@ assembly name="System.Data"        #>
 <#@ import namespace="System.Data"     #>
 <#@ import namespace="LinqToDB.Data"   #>
-<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Text"     #>
 <#@ include file="DataModel.ttinclude" #>
 <#
 	if (BaseDataContextClass == null)
@@ -156,17 +156,17 @@ void GenerateTypesFromMetadata()
 
 			DataContextObject.Members.Add(c);
 		}
-	}
 
-	DataContextObject.Members.Add(new MemberGroup
-	{
-		IsCompact = true,
-		Members   =
+		DataContextObject.Members.Add(new MemberGroup
 		{
-			new Method(() => "void", "InitDataContext"  ) { AccessModifier = AccessModifier.Partial },
-			new Method(() => "void", "InitMappingSchema") { AccessModifier = AccessModifier.Partial }
-		}
-	});
+			IsCompact = true,
+			Members   =
+			{
+				new Method(() => "void", "InitDataContext"  ) { AccessModifier = AccessModifier.Partial },
+				new Method(() => "void", "InitMappingSchema") { AccessModifier = AccessModifier.Partial }
+			}
+		});
+	}
 
 	if (Tables.Count > 0)
 		DataContextObject.Members.Insert(0, defProps);
@@ -242,6 +242,7 @@ void GenerateTypesFromMetadata()
 
 		var tableAttrs = new List<string>();
 
+		if (ServerName   != null) tableAttrs.Add("Server="    + ToStringLiteral(ServerName));
 		if (DatabaseName != null) tableAttrs.Add("Database="  + ToStringLiteral(DatabaseName));
 		if (t.Schema     != null) tableAttrs.Add("Schema="    + ToStringLiteral(t.Schema));
 
@@ -252,15 +253,7 @@ void GenerateTypesFromMetadata()
 
 		t.Attributes.Add(new Attribute("Table", tableAttrs.ToArray()) { IsSeparated = true } );
 
-		var comments = new List<string>();
-
-		if (!string.IsNullOrWhiteSpace(t.Description))
-		{
-			comments.Add("/ <summary>");
-			foreach (var line in t.Description.Split('\n'))
-				comments.Add("/ " + line.TrimEnd());
-			comments.Add("/ </summary>");
-		}
+		var comments = CreateXmlCommentFromText(t.Description);
 
 		if (comments.Count > 0)
 		{
@@ -280,7 +273,7 @@ void GenerateTypesFromMetadata()
 			: ToStringLiteral(c.ColumnName).Length)) ?? 0;
 		var dbTypeMaxLen   = t.Columns.Values.Max  (c => (int?)(c.ColumnType.Length)) ?? 0;
 		var dataTypeMaxLen = t.Columns.Values.Where(c => c.DataType != null).Max  (c => (int?)(c.DataType.Length)) ?? 0;
-		var dataTypePrefix = t.Columns.Values.Any  (c => c.MemberName == "DataType") ? "LinqToDB." : "";
+		var dataTypePrefix = "LinqToDB.";
 
 		foreach (var c in t.Columns.Values)
 		{
@@ -355,7 +348,7 @@ void GenerateTypesFromMetadata()
 				canBeReplaced = false;
 			}
 
-			c.Attributes.Add(ca);
+			c.Attributes.Insert(0, ca);
 
 			// PK.
 			//
@@ -367,9 +360,9 @@ void GenerateTypesFromMetadata()
 					pka.Parameters.Add(c.PrimaryKeyOrder.ToString());
 
 				if (canBeReplaced)
-					c.Attributes[0] = pka;
-				else
-					c.Attributes.Add(pka);
+					c.Attributes.Remove(ca);
+
+				c.Attributes.Add(pka);
 
 				canBeReplaced = false;
 			}
@@ -381,9 +374,9 @@ void GenerateTypesFromMetadata()
 				var ida = new Attribute("Identity");
 
 				if (canBeReplaced)
-					c.Attributes[0] = ida;
-				else
-					c.Attributes.Add(ida);
+					c.Attributes.Remove(ca);
+
+				c.Attributes.Add(ida);
 
 				canBeReplaced = false;
 			}
@@ -395,15 +388,7 @@ void GenerateTypesFromMetadata()
 			else if (!c.IsIdentity)
 				c.Attributes.Add(new Attribute("NotNull"));
 
-			var columnComments = new List<string>();
-
-			if (!string.IsNullOrWhiteSpace(c.Description))
-			{
-				columnComments.Add("/ <summary>");
-				foreach (var line in c.Description.Split('\n'))
-					columnComments.Add("/ " + line.TrimEnd());
-				columnComments.Add("/ </summary>");
-			}
+			var columnComments = CreateXmlCommentFromText(c.Description);
 
 			if (columnComments.Count > 0)
 				c.Comment.AddRange(columnComments);
@@ -474,9 +459,9 @@ void GenerateTypesFromMetadata()
 
 					switch (key.AssociationType)
 					{
-						case AssociationType.OneToOne  : aa.Parameters.Add("Relationship=Relationship.OneToOne");  break;
-						case AssociationType.OneToMany : aa.Parameters.Add("Relationship=Relationship.OneToMany"); break;
-						case AssociationType.ManyToOne : aa.Parameters.Add("Relationship=Relationship.ManyToOne"); break;
+						case AssociationType.OneToOne  : aa.Parameters.Add("Relationship=LinqToDB.Mapping.Relationship.OneToOne");  break;
+						case AssociationType.OneToMany : aa.Parameters.Add("Relationship=LinqToDB.Mapping.Relationship.OneToMany"); break;
+						case AssociationType.ManyToOne : aa.Parameters.Add("Relationship=LinqToDB.Mapping.Relationship.ManyToOne"); break;
 					}
 
 					if (key.BackReference != null)
@@ -720,12 +705,30 @@ void GenerateTypesFromMetadata()
 				continue;
 			}
 
+			var comments  = CreateXmlCommentFromText(p.Description);
+			List<string> returnsComments = null;
+
+			foreach (var param in p.ProcParameters)
+			{
+				if (param.IsResult && p.IsFunction)
+					returnsComments = CreateXmlCommentFromText(param.Description, "returns");
+				else
+					comments.AddRange(CreateXmlCommentFromText(param.Description, "param", $"name=\"{param.ParameterName}\""));
+			}
+
+			if (returnsComments != null)
+				comments.AddRange(returnsComments);
+
+			if (comments.Count > 0)
+				p.Comment.AddRange(comments);
+
 			proc.Members.Add(p);
 
 			if (p.IsTableFunction)
 			{
 				var tableAttrs = new List<string>();
 
+				if (ServerName   != null) tableAttrs.Add("Server="   + ToStringLiteral(ServerName));
 				if (DatabaseName != null) tableAttrs.Add("Database=" + ToStringLiteral(DatabaseName));
 				if (p.Schema     != null) tableAttrs.Add("Schema="   + ToStringLiteral(p.Schema));
 
@@ -778,15 +781,16 @@ void GenerateTypesFromMetadata()
 			}
 
 			if (!p.IsAggregateFunction)
-				foreach (var pr in p.ProcParameters.Where(par => !par.IsResult))
+				foreach (var pr in p.ProcParameters.Where(par => !par.IsResult || !p.IsFunction))
 					p.ParameterBuilders.Add(() => string.Format("{0}{1} {2}",
-						pr.IsOut ? pr.IsIn ? "ref " : "out " : "", pr.Type.ToTypeName(), pr.ParameterName));
+						pr.IsOut || pr.IsResult ? pr.IsIn ? "ref " : "out " : "", pr.Type.ToTypeName(), pr.ParameterName));
 
 			if (p.IsTableFunction)
 			{
 				p.BodyBuilders.Add(() => new[]
 				{
 					string.Format("return " + thisDataContext + ".GetTable<{0}>(this, (MethodInfo)MethodBase.GetCurrentMethod()", p.ResultTable.TypeName)
+					+ (EnableNullableReferenceTypes ? "!" : "")
 					+ (p.ProcParameters.Count == 0 ? ");" : ",")
 				});
 
@@ -805,16 +809,17 @@ void GenerateTypesFromMetadata()
 				var spName =
 					SqlBuilder.BuildTableName(
 						new System.Text.StringBuilder(),
-						(string)SqlBuilder.Convert(DatabaseName,    LinqToDB.SqlProvider.ConvertType.NameToDatabase),
-						(string)SqlBuilder.Convert(p.Schema,        LinqToDB.SqlProvider.ConvertType.NameToSchema),
-						(string)SqlBuilder.Convert(p.ProcedureName, LinqToDB.SqlProvider.ConvertType.NameToQueryTable)
+						ServerName   == null ? null : (string)SqlBuilder.ConvertInline(ServerName,   LinqToDB.SqlProvider.ConvertType.NameToServer),
+						DatabaseName == null ? null : (string)SqlBuilder.ConvertInline(DatabaseName, LinqToDB.SqlProvider.ConvertType.NameToDatabase),
+						p.Schema     == null ? null : (string)SqlBuilder.ConvertInline(p.Schema,     LinqToDB.SqlProvider.ConvertType.NameToSchema),
+						                              (string)SqlBuilder.ConvertInline(p.ProcedureName, LinqToDB.SqlProvider.ConvertType.NameToQueryTable)
 					).ToString();
 
 				spName = ToStringLiteral(spName);
 
-				var inputParameters      = p.ProcParameters.Where(pp => pp.IsIn).            ToList();
-				var outputParameters     = p.ProcParameters.Where(pp => pp.IsOut).           ToList();
-				var inOrOutputParameters = p.ProcParameters.Where(pp => pp.IsIn || pp.IsOut).ToList();
+				var inputParameters      = p.ProcParameters.Where(pp => pp.IsIn).                            ToList();
+				var outputParameters     = p.ProcParameters.Where(pp => pp.IsOut || pp.IsResult).            ToList();
+				var inOrOutputParameters = p.ProcParameters.Where(pp => pp.IsIn  || pp.IsOut || pp.IsResult).ToList();
 
 				spName += inOrOutputParameters.Count == 0
 					? (p.ResultTable == null || !GenerateProcedureResultAsList ? ");" : ").ToList();")
@@ -826,7 +831,7 @@ void GenerateTypesFromMetadata()
 				while (p.ProcParameters.Any(pp => pp.ParameterName == retName))
 					retName = "ret" + ++retNo;
 
-				var hasOut = outputParameters.Any(pr => pr.IsOut);
+				var hasOut = outputParameters.Any(pr => pr.IsOut || pr.IsResult);
 				var prefix = hasOut ? "var " + retName + " = " : "return ";
 
 				if (p.ResultTable == null)
@@ -864,7 +869,7 @@ void GenerateTypesFromMetadata()
 
 				var maxLenSchema = inputParameters.Max(pr => (int?)pr.SchemaName.   Length) ?? 0;
 				var maxLenParam  = inputParameters.Max(pr => (int?)pr.ParameterName.Length) ?? 0;
-				var maxLenType   = inputParameters.Max(pr => (int?)("DataType." + pr.DataType).Length) ?? 0;
+				var maxLenType   = inputParameters.Max(pr => (int?)("LinqToDB.DataType." + pr.DataType).Length) ?? 0;
 
 				for (var idx = 0; idx < inOrOutputParameters.Count; idx++)
 				{
@@ -874,20 +879,20 @@ void GenerateTypesFromMetadata()
 					p.BodyBuilders.Add(() =>
 					{
 						var str = string.Format(
-							!pr.IsIn && pr.IsOut
+							!pr.IsIn && (pr.IsOut || pr.IsResult)
 								? "\tnew DataParameter({0}, null, {3}{4})"
 								: "\tnew DataParameter({0}, {1}{2}, {3}{4})" + (GenerateProcedureDbType(pr) ? "{{ DbType = {5} }}" : null),
 							ToStringLiteral(pr.SchemaName),
 							LenDiff(maxLenSchema, pr.SchemaName),
 							pr.ParameterName,
 							LenDiff(maxLenParam, pr.ParameterName),
-							"DataType." + pr.DataType,
+							"LinqToDB.DataType." + pr.DataType,
 							ToStringLiteral(pr.SchemaType));
 
-						if (pr.IsOut)
+						if (pr.IsOut || pr.IsResult)
 						{
-							str += LenDiff(maxLenType, "DataType." + pr.DataType);
-							str += " { Direction = " + (pr.IsIn ? "ParameterDirection.InputOutput" : "ParameterDirection.Output");
+							str += LenDiff(maxLenType, "LinqToDB.DataType." + pr.DataType);
+							str += " { Direction = " + (pr.IsIn ? "ParameterDirection.InputOutput" : (pr.IsResult ? "ParameterDirection.ReturnValue" : "ParameterDirection.Output"));
 
 							if (pr.Size != null && pr.Size.Value != 0)
 								str += ", Size = " + pr.Size.Value;
@@ -913,7 +918,7 @@ void GenerateTypesFromMetadata()
 
 					p.BodyBuilders.Add(() => new [] { string.Empty });
 
-					foreach (var pr in p.ProcParameters.Where(_ => _.IsOut))
+					foreach (var pr in p.ProcParameters.Where(_ => _.IsOut || _.IsResult))
 					{
 						p.BodyBuilders.Add(() => new [] { string.Format("{0} {1}= Converter.ChangeTypeTo<{2}>{3}(((IDbDataParameter)dataConnection.Command.Parameters[{4}]).{5}Value);",
 							pr.ParameterName,
@@ -1017,7 +1022,7 @@ void MakeMembersNamesUnique(IEnumerable<IClassMember> members, string defaultNam
 		members,
 		reservedNames,
 		m => m is Table tbl ? (tbl.Schema != null && (PrefixTableMappingForDefaultSchema || !tbl.IsDefaultSchema) && PrefixTableMappingWithSchema ? tbl.Schema + "_" : null) + tbl.Name : (m is TypeBase t ? t.Name : ((MemberBase)m).Name),
-		(m, newName) =>
+		(m, newName, _) =>
 		{
 			if (m is TypeBase t)
 				t.Name = newName;
@@ -1046,6 +1051,27 @@ IEnumerable<IClassMember> GetAllClassMembers(IEnumerable<IClassMember> members, 
 string NormalizeStringName(string name)
 {
 	return ToStringLiteral(name);
+}
+
+List<string> CreateXmlCommentFromText(string text, string tag = "summary", string attributes = null)
+{
+	var comments = new List<string>();
+
+	if (!string.IsNullOrWhiteSpace(text))
+	{
+		comments.Add($"/ <{tag}{(attributes == null ? null : " " + attributes)}>");
+		foreach (var line in text.Split('\n'))
+			comments.Add("/ " + line
+				.Replace("&", "&amp;")
+				.Replace("<", "&lt;")
+				.Replace(">", "&gt;")
+				.Replace("\"", "&quot;")
+				.Replace("'", "&apos;")
+				.TrimEnd());
+		comments.Add($"/ </{tag}>");
+	}
+
+	return comments;
 }
 
 #>

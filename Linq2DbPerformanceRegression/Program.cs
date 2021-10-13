@@ -183,5 +183,31 @@ namespace Linq2DbMemoryRegression
                 compiledQuery(dc, "61a018e7-6e43-44b7-ad53-5a55e626fbbe", "VALUE", "N", 3479583475, 3845793);
             }
         }
+
+         [Benchmark]
+        public async Task Large__UpdateStatement_With_Variable_Paramters_Using_Expression_Overload()
+        {
+             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
+            {
+                var query = await dc.GetTable<TESTTABLE>()
+                .Where(i => i.COLUMN1 == "61a018e7-6e43-44b7-ad53-5a55e626fbbe")
+                .Set(i => i.COLUMN2, i => "VALUE")
+                .Set(i => i.COLUMN3, i => "VALUE2")
+                .Set(i => i.COLUMN4, i => "VALUE3")
+                .Set(i => i.COLUMN5, i => "VALUE4")
+                .Set(i => i.COLUMN6, i => "VALUE5")
+                .Set(i => i.COLUMN7, i => "")
+                .Set(i => i.COLUMN8, i => "")
+                .Set(i => i.COLUMN9, i => "VALUE6")
+                .Set(i => i.COLUMN10, i => "VALUE7")
+                .Set(i => i.COLUMN11, i => "Microsoft Windows 10 Enterprise")
+                .Set(i => i.COLUMN12, i => "N")
+                .Set(i => i.COLUMN15, i => VariableValue + 1)
+                .Set(i => i.COLUMN16, i => VariableValue + 1)
+                .UpdateAsync();
+
+                VariableValue += 2;
+            }
+        }
     }
 }

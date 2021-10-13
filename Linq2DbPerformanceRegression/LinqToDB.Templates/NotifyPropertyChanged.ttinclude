@@ -60,6 +60,9 @@ void NotifyPropertyChangedImpl()
 			parentMembers.Insert  (index, gr);
 		}
 
+		gr.Conditional   = prop.Conditional;
+		prop.Conditional = null;
+
 		if (prop.IsAuto)
 		{
 			var field = new Field(() => type, "_" + ToCamelCase(name))
@@ -269,20 +272,7 @@ public string[] OnPropertyChangedBody = new[]
 	"",
 	"if (propertyChanged != null)",
 	"{",
-	"#if SILVERLIGHT",
-	"\tif (System.Windows.Deployment.Current.Dispatcher.CheckAccess())",
-	"\t\tpropertyChanged(this, new PropertyChangedEventArgs(propertyName));",
-	"\telse",
-	"\t\tSystem.Windows.Deployment.Current.Dispatcher.BeginInvoke(",
-	"\t\t\t() =>",
-	"\t\t\t{",
-	"\t\t\t\tvar pc = PropertyChanged;",
-	"\t\t\t\tif (pc != null)",
-	"\t\t\t\t\tpc(this, new PropertyChangedEventArgs(propertyName));",
-	"\t\t\t});",
-	"#else",
 	"\tpropertyChanged(this, new PropertyChangedEventArgs(propertyName));",
-	"#endif",
 	"}",
 };
 
@@ -292,20 +282,7 @@ public string[] OnPropertyChangedArgBody = new[]
 	"",
 	"if (propertyChanged != null)",
 	"{",
-	"#if SILVERLIGHT",
-	"\tif (System.Windows.Deployment.Current.Dispatcher.CheckAccess())",
-	"\t\tpropertyChanged(this, arg);",
-	"\telse",
-	"\t\tSystem.Windows.Deployment.Current.Dispatcher.BeginInvoke(",
-	"\t\t\t() =>",
-	"\t\t\t{",
-	"\t\t\t\tvar pc = PropertyChanged;",
-	"\t\t\t\tif (pc != null)",
-	"\t\t\t\t\tpc(this, arg);",
-	"\t\t\t});",
-	"#else",
 	"\tpropertyChanged(this, arg);",
-	"#endif",
 	"}",
 };
 
@@ -315,20 +292,7 @@ public string[] OnPropertyChangingBody = new[]
 	"",
 	"if (propertyChanging != null)",
 	"{",
-	"#if SILVERLIGHT",
-	"\tif (System.Windows.Deployment.Current.Dispatcher.CheckAccess())",
-	"\t\tpropertyChanging(this, new PropertyChangingEventArgs(propertyName));",
-	"\telse",
-	"\t\tSystem.Windows.Deployment.Current.Dispatcher.BeginInvoke(",
-	"\t\t\t() =>",
-	"\t\t\t{",
-	"\t\t\t\tvar pc = PropertyChanging;",
-	"\t\t\t\tif (pc != null)",
-	"\t\t\t\t\tpc(this, new PropertyChangingEventArgs(propertyName));",
-	"\t\t\t});",
-	"#else",
 	"\tpropertyChanging(this, new PropertyChangingEventArgs(propertyName));",
-	"#endif",
 	"}",
 };
 
@@ -338,20 +302,7 @@ public string[] OnPropertyChangingArgBody = new[]
 	"",
 	"if (propertyChanging != null)",
 	"{",
-	"#if SILVERLIGHT",
-	"\tif (System.Windows.Deployment.Current.Dispatcher.CheckAccess())",
-	"\t\tpropertyChanging(this, arg);",
-	"\telse",
-	"\t\tSystem.Windows.Deployment.Current.Dispatcher.BeginInvoke(",
-	"\t\t\t() =>",
-	"\t\t\t{",
-	"\t\t\t\tvar pc = PropertyChanging;",
-	"\t\t\t\tif (pc != null)",
-	"\t\t\t\t\tpc(this, arg);",
-	"\t\t\t});",
-	"#else",
 	"\tpropertyChanging(this, arg);",
-	"#endif",
 	"}",
 };
 
