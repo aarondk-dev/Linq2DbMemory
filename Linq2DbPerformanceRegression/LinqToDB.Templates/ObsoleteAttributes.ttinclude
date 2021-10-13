@@ -1,5 +1,3 @@
-<#@ include file="T4Model.ttinclude"  once="true" #>
-<#@ include file="LinqToDB.ttinclude" once="true" #>
 <#
 	{
 		var beforeGenerateLinqToDBModel = BeforeGenerateLinqToDBModel;
@@ -13,7 +11,7 @@
 
 			foreach (var table in Tables.Values)
 			{
-				var idx = table.Description.IndexOf("[Obsolete", StringComparison.InvariantCulture);
+				var idx = table.Description.IndexOf("[Obsolete");
 
 				if (idx >= 0)
 				{
@@ -25,7 +23,7 @@
 						var attr = new Attribute(text);
 						var info = Tuple.Create(table.Schema, table.Name, text);
 
-						if (obsoleteTables.All(a => !ReferenceEquals(a, info)))
+						if (obsoleteTables.All(a => a != info))
 							obsoleteTables.Add(info);
 						table.Attributes.Add(attr);
 						table.Description = table.Description.Substring(0, idx) + table.Description.Substring(idx2 + 1);
@@ -34,7 +32,7 @@
 
 				foreach (var c in table.Columns.Values)
 				{
-					idx = c.Description.IndexOf("[Obsolete", StringComparison.InvariantCulture);
+					idx = c.Description.IndexOf("[Obsolete");
 
 					if (idx >= 0)
 					{

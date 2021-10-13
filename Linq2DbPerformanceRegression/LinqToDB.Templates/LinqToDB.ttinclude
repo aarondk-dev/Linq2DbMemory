@@ -1,7 +1,8 @@
-<#@ assembly name="System.Data"                    #>
-<#@ import namespace="System.Data"                 #>
-<#@ import namespace="LinqToDB.Data"               #>
-<#@ include file="DataModel.ttinclude" once="true" #>
+<#@ assembly name="System.Data"        #>
+<#@ import namespace="System.Data"     #>
+<#@ import namespace="LinqToDB.Data"   #>
+<#@ import namespace="System.Text" #>
+<#@ include file="DataModel.ttinclude" #>
 <#
 	if (BaseDataContextClass == null)
 		BaseDataContextClass = "LinqToDB.Data.DataConnection";
@@ -10,47 +11,43 @@
 Action BeforeGenerateLinqToDBModel = () => {};
 Action AfterGenerateLinqToDBModel  = () => {};
 
-public Func<Table,MemberBase> GenerateProviderSpecificTable = _ => null;
-public Func<Parameter, bool>  GenerateProcedureDbType       = _ => false;
+Func<Table,MemberBase> GenerateProviderSpecificTable = t => null;
+Func<Parameter, bool>  GenerateProcedureDbType       = p => false;
 
-static bool GenerateLinqToDbConnectionOptionsConstructors = true;
-bool   GenerateObsoleteAttributeForAliases                = false;
-bool   GenerateFindExtensions                             = true;
-bool   IsCompactColumns                                   = true;
-bool   IsCompactColumnAliases                             = true;
-bool   GenerateDataTypes                                  = false;
-bool?  GenerateLengthProperty                             = null;
-bool?  GeneratePrecisionProperty                          = null;
-bool?  GenerateScaleProperty                              = null;
-bool   GenerateDbTypes                                    = false;
-bool   GenerateSchemaAsType                               = false;
-bool   GenerateViews                                      = true;
-bool   GenerateProcedureResultAsList                      = false;
-bool   GenerateProceduresOnTypedContext                   = true;
-bool   PrefixTableMappingWithSchema                       = true;
-bool   PrefixTableMappingForDefaultSchema                 = false;
-string SchemaNameSuffix                                   = "Schema";
-string SchemaDataContextTypeName                          = "DataContext";
+bool   GenerateObsoleteAttributeForAliases = false;
+bool   GenerateFindExtensions              = true;
+bool   IsCompactColumns                    = true;
+bool   IsCompactColumnAliases              = true;
+bool   GenerateDataTypes                   = false;
+bool?  GenerateLengthProperty              = null;
+bool?  GeneratePrecisionProperty           = null;
+bool?  GenerateScaleProperty               = null;
+bool   GenerateDbTypes                     = false;
+bool   GenerateSchemaAsType                = false;
+bool   GenerateViews                       = true;
+bool   GenerateProcedureResultAsList       = false;
+bool   GenerateProceduresOnTypedContext    = true;
+bool   PrefixTableMappingWithSchema        = true;
+bool   PrefixTableMappingForDefaultSchema  = false;
+string SchemaNameSuffix                    = "Schema";
+string SchemaDataContextTypeName           = "DataContext";
 
-public Dictionary<string,string> SchemaNameMapping = new Dictionary<string,string>();
+Dictionary<string,string> SchemaNameMapping = new Dictionary<string,string>();
 
-public Func<string,string,IEnumerable<Method>> GetConstructors =  GetConstructorsImpl;
+Func<string,string,IEnumerable<Method>> GetConstructors =  (conf, name) => GetConstructorsImpl(conf, name);
 
-public Func<Column, string, string, bool, string> BuildColumnComparison = (c, padding1, padding2, last) => string.Format("\tt.{0}{1} == {0}{2}{3}", c.MemberName, padding1, last ? "" : padding2, last ? ");" : " &&");
+Func<Column, string, string, bool, string> BuildColumnComparison = (c, padding1, padding2, last) =>
+{
+	return string.Format("\tt.{0}{1} == {0}{3}{2}", c.MemberName, padding1, last ? ");" : " &&", last ? "" : padding2);
+};
 
-private static IEnumerable<Method> GetConstructorsImpl(string defaultConfiguration, string name)
+static IEnumerable<Method> GetConstructorsImpl(string defaultConfiguration, string name)
 {
 	if (defaultConfiguration == null)
-		yield return new Method(null, name);
+		yield return new Method((Func<string>)null, name);
 	else
 		yield return new Method(null, name) { AfterSignature = { ": base(\"" + defaultConfiguration + "\")" } };
 	yield return new Method(null, name, new Func<string>[] { () => "string configuration" }) { AfterSignature = { ": base(configuration)" } };
-	// TODO: v4: remove BaseDataContextClass check against DataContext
-	if (BaseDataContextClass != "LinqToDB.DataContext" && GenerateLinqToDbConnectionOptionsConstructors)
-	{
-		yield return new Method(null, name, new Func<string>[] { () => "LinqToDbConnectionOptions options" }) { AfterSignature = { ": base(options)" } };
-		yield return new Method(null, name, new Func<string>[] { () => string.Format("LinqToDbConnectionOptions<{0}> options", name) }) { AfterSignature = { ": base(options)" } };
-	}
 }
 
 void GenerateTypesFromMetadata()
@@ -59,7 +56,6 @@ void GenerateTypesFromMetadata()
 
 	Model.Usings.Add("LinqToDB");
 	Model.Usings.Add("LinqToDB.Mapping");
-	Model.Usings.Add("LinqToDB.Configuration");
 
 	if (NamespaceName == null)
 		NamespaceName = "DataModel";
@@ -119,7 +115,7 @@ void GenerateTypesFromMetadata()
 
 	var defProps           = new MemberGroup { IsCompact = true };
 	var defAliases         = new MemberGroup { IsCompact = true, Region = "Alias members" };
-	var defTableExtensions = new MemberGroup();
+	var defTableExtensions = new MemberGroup { };
 
 	if (schemas.Count > 0)
 	{
@@ -134,7 +130,7 @@ void GenerateTypesFromMetadata()
 		foreach (var schema in schemas.Values)
 		{
 			schemaMembers.Members.Add(new Property(true, () => schema.TypeName + "." + SchemaDataContextTypeName, schema.PropertyName));
-			body.Add(() => new [] {
+			body.Add(() => new string[] {
 				schema.PropertyName + LenDiff(maxLen1, schema.PropertyName) +
 				" = new " + schema.TypeName + "." + LenDiff(maxLen2, schema.TypeName) +
 				SchemaDataContextTypeName + "(this);"});
@@ -160,17 +156,17 @@ void GenerateTypesFromMetadata()
 
 			DataContextObject.Members.Add(c);
 		}
-
-		DataContextObject.Members.Add(new MemberGroup
-		{
-			IsCompact = true,
-			Members   =
-			{
-				new Method(() => "void", "InitDataContext"  ) { AccessModifier = AccessModifier.Partial },
-				new Method(() => "void", "InitMappingSchema") { AccessModifier = AccessModifier.Partial }
-			}
-		});
 	}
+
+	DataContextObject.Members.Add(new MemberGroup
+	{
+		IsCompact = true,
+		Members   =
+		{
+			new Method(() => "void", "InitDataContext"  ) { AccessModifier = AccessModifier.Partial },
+			new Method(() => "void", "InitMappingSchema") { AccessModifier = AccessModifier.Partial }
+		}
+	});
 
 	if (Tables.Count > 0)
 		DataContextObject.Members.Insert(0, defProps);
@@ -219,7 +215,8 @@ void GenerateTypesFromMetadata()
 			new Property(
 				() => string.Format("ITable<{0}>", t.TypeName),
 				t.DataContextPropertyName,
-				() => new[] { string.Format((schema == null ? "this" : "_dataContext") + ".GetTable<{0}>()", t.TypeName) });
+				() => new[] { string.Format((schema == null ? "this" : "_dataContext") + ".GetTable<{0}>()", t.TypeName) },
+				null);
 
 		if (dcProp == null) continue;
 
@@ -234,7 +231,8 @@ void GenerateTypesFromMetadata()
 			aProp = new Property(
 				() => string.Format("ITable<{0}>", t.TypeName),
 				t.AliasPropertyName,
-				() => new[] { t.DataContextPropertyName });
+				() => new[] { t.DataContextPropertyName },
+				null);
 
 			if (GenerateObsoleteAttributeForAliases)
 				aProp.Attributes.Add(new Attribute("Obsolete", ToStringLiteral("Use " + t.DataContextPropertyName + " instead.")));
@@ -244,7 +242,6 @@ void GenerateTypesFromMetadata()
 
 		var tableAttrs = new List<string>();
 
-		if (ServerName   != null) tableAttrs.Add("Server="    + ToStringLiteral(ServerName));
 		if (DatabaseName != null) tableAttrs.Add("Database="  + ToStringLiteral(DatabaseName));
 		if (t.Schema     != null) tableAttrs.Add("Schema="    + ToStringLiteral(t.Schema));
 
@@ -255,14 +252,23 @@ void GenerateTypesFromMetadata()
 
 		t.Attributes.Add(new Attribute("Table", tableAttrs.ToArray()) { IsSeparated = true } );
 
-		var comments = CreateXmlCommentFromText(t.Description);
+		var comments = new List<string>();
+
+		if (!string.IsNullOrWhiteSpace(t.Description))
+		{
+			comments.Add("/ <summary>");
+			foreach (var line in t.Description.Split('\n'))
+				comments.Add("/ " + line.TrimEnd());
+			comments.Add("/ </summary>");
+		}
 
 		if (comments.Count > 0)
 		{
 			t.     Comment.AddRange(comments);
 			dcProp.Comment.AddRange(comments);
 
-			aProp?.Comment.AddRange(comments);
+			if (aProp != null)
+				aProp.Comment.AddRange(comments);
 		}
 
 		var columns        = new MemberGroup { IsCompact = IsCompactColumns };
@@ -274,7 +280,7 @@ void GenerateTypesFromMetadata()
 			: ToStringLiteral(c.ColumnName).Length)) ?? 0;
 		var dbTypeMaxLen   = t.Columns.Values.Max  (c => (int?)(c.ColumnType.Length)) ?? 0;
 		var dataTypeMaxLen = t.Columns.Values.Where(c => c.DataType != null).Max  (c => (int?)(c.DataType.Length)) ?? 0;
-		var dataTypePrefix = "LinqToDB.";
+		var dataTypePrefix = t.Columns.Values.Any  (c => c.MemberName == "DataType") ? "LinqToDB." : "";
 
 		foreach (var c in t.Columns.Values)
 		{
@@ -349,7 +355,7 @@ void GenerateTypesFromMetadata()
 				canBeReplaced = false;
 			}
 
-			c.Attributes.Insert(0, ca);
+			c.Attributes.Add(ca);
 
 			// PK.
 			//
@@ -361,9 +367,9 @@ void GenerateTypesFromMetadata()
 					pka.Parameters.Add(c.PrimaryKeyOrder.ToString());
 
 				if (canBeReplaced)
-					c.Attributes.Remove(ca);
-
-				c.Attributes.Add(pka);
+					c.Attributes[0] = pka;
+				else
+					c.Attributes.Add(pka);
 
 				canBeReplaced = false;
 			}
@@ -375,9 +381,11 @@ void GenerateTypesFromMetadata()
 				var ida = new Attribute("Identity");
 
 				if (canBeReplaced)
-					c.Attributes.Remove(ca);
+					c.Attributes[0] = ida;
+				else
+					c.Attributes.Add(ida);
 
-				c.Attributes.Add(ida);
+				canBeReplaced = false;
 			}
 
 			// Nullable.
@@ -387,7 +395,15 @@ void GenerateTypesFromMetadata()
 			else if (!c.IsIdentity)
 				c.Attributes.Add(new Attribute("NotNull"));
 
-			var columnComments = CreateXmlCommentFromText(c.Description);
+			var columnComments = new List<string>();
+
+			if (!string.IsNullOrWhiteSpace(c.Description))
+			{
+				columnComments.Add("/ <summary>");
+				foreach (var line in c.Description.Split('\n'))
+					columnComments.Add("/ " + line.TrimEnd());
+				columnComments.Add("/ </summary>");
+			}
 
 			if (columnComments.Count > 0)
 				c.Comment.AddRange(columnComments);
@@ -458,9 +474,9 @@ void GenerateTypesFromMetadata()
 
 					switch (key.AssociationType)
 					{
-						case AssociationType.OneToOne  : aa.Parameters.Add("Relationship=LinqToDB.Mapping.Relationship.OneToOne");  break;
-						case AssociationType.OneToMany : aa.Parameters.Add("Relationship=LinqToDB.Mapping.Relationship.OneToMany"); break;
-						case AssociationType.ManyToOne : aa.Parameters.Add("Relationship=LinqToDB.Mapping.Relationship.ManyToOne"); break;
+						case AssociationType.OneToOne  : aa.Parameters.Add("Relationship=Relationship.OneToOne");  break;
+						case AssociationType.OneToMany : aa.Parameters.Add("Relationship=Relationship.OneToMany"); break;
+						case AssociationType.ManyToOne : aa.Parameters.Add("Relationship=Relationship.ManyToOne"); break;
 					}
 
 					if (key.BackReference != null)
@@ -482,17 +498,14 @@ void GenerateTypesFromMetadata()
 
 					associations.Members.Add(key);
 
-					var extension = new Method(() => string.Format("IQueryable<{0}{1}>", key.OtherTable.TypePrefix, key.OtherTable.TypeName),
-						GetAssociationExtensionPluralName(key))
-					{
-						Name     = GetAssociationExtensionPluralName(key),
-						IsStatic = true
-					};
+					var extension = new Method(() => string.Format("IQueryable<{0}>", key.OtherTable.TypePrefix + key.OtherTable.TypeName), GetAssociationExtensionPluralName(key));
+					extension.Name = GetAssociationExtensionPluralName(key);
 
 					extension.ParameterBuilders.Add(() => string.Format("this {0}{1} obj", t.TypePrefix, t.TypeName));
 
 					extension.ParameterBuilders.Add(() => "IDataContext db");
 					extension.Attributes.Add(aa);
+					extension.IsStatic = true;
 
 					extension.Comment.Add("/ <summary>");
 					extension.Comment.Add("/ " + key.KeyName);
@@ -525,7 +538,7 @@ void GenerateTypesFromMetadata()
 
 					if (key.AssociationType != AssociationType.OneToMany)
 					{
-						var single = new Method(() => new ModelType(t.TypePrefix + t.TypeName, true, key.CanBeNull).ToTypeName(), GetAssociationExtensionSingularName(key));
+						var single = new Method(() => t.TypePrefix + t.TypeName, GetAssociationExtensionSinglularName(key));
 
 						single.ParameterBuilders.Add(() => string.Format("this {0}{1} obj", key.OtherTable.TypePrefix, key.OtherTable.TypeName));
 
@@ -590,9 +603,9 @@ void GenerateTypesFromMetadata()
 
 			tableExtensions.Members.Add(
 				new Method(
-					() => new ModelType(t.TypeName, true, true).ToTypeName(),
+					() => t.TypeName,
 					"Find",
-					new Func<string>[] { () => string.Format("this ITable<{0}> table", t.TypeName) }
+					new Func<string>[] { () => (string.Format("this ITable<{0}> table", t.TypeName)) }
 						.Union(PKs.Select(c => (Func<string>)(() => c.BuildType() + " " + c.MemberName))),
 					() => new[] { "return table.FirstOrDefault(t =>" }
 						.Union(PKs.SelectMany((c,i) =>
@@ -707,30 +720,12 @@ void GenerateTypesFromMetadata()
 				continue;
 			}
 
-			var comments  = CreateXmlCommentFromText(p.Description);
-			List<string> returnsComments = null;
-
-			foreach (var param in p.ProcParameters)
-			{
-				if (param.IsResult && p.IsFunction)
-					returnsComments = CreateXmlCommentFromText(param.Description, "returns");
-				else
-					comments.AddRange(CreateXmlCommentFromText(param.Description, "param", string.Format("name=\"{0}\"", param.ParameterName)));
-			}
-
-			if (returnsComments != null)
-				comments.AddRange(returnsComments);
-
-			if (comments.Count > 0)
-				p.Comment.AddRange(comments);
-
 			proc.Members.Add(p);
 
 			if (p.IsTableFunction)
 			{
 				var tableAttrs = new List<string>();
 
-				if (ServerName   != null) tableAttrs.Add("Server="   + ToStringLiteral(ServerName));
 				if (DatabaseName != null) tableAttrs.Add("Database=" + ToStringLiteral(DatabaseName));
 				if (p.Schema     != null) tableAttrs.Add("Schema="   + ToStringLiteral(p.Schema));
 
@@ -757,7 +752,7 @@ void GenerateTypesFromMetadata()
 					p.ParameterBuilders.Add(() => "IEnumerable<TSource> src");
 
 				foreach (var inp in p.ProcParameters.Where(pr => !pr.IsResult))
-					p.ParameterBuilders.Add(() => string.Format("Expression<Func<TSource, {0}>> {1}", inp.Type.ToTypeName(), inp.ParameterName));
+					p.ParameterBuilders.Add(() => $"Expression<Func<TSource, {inp.Type.ToTypeName()}>> " + inp.ParameterName);
 
 				p.Name += "<TSource>";
 			}
@@ -777,20 +772,22 @@ void GenerateTypesFromMetadata()
 						: "IEnumerable<" + p.ResultTable.TypeName + ">";
 
 				if (p.IsDefaultSchema || !GenerateSchemaAsType)
-					p.ParameterBuilders.Add(() => string.Format("this {0} dataConnection",  GenerateProceduresOnTypedContext ? currentContext.Name : "DataConnection"));
+					p.ParameterBuilders.Add(() => $"this { (GenerateProceduresOnTypedContext ? currentContext.Name : "DataConnection") } dataConnection");
 				else
-					p.ParameterBuilders.Add(() => string.Format("{0} dataConnection", GenerateProceduresOnTypedContext ? currentContext.Name : "DataConnection"));
+					p.ParameterBuilders.Add(() => $"{ (GenerateProceduresOnTypedContext ? currentContext.Name : "DataConnection") } dataConnection");
 			}
 
 			if (!p.IsAggregateFunction)
-				foreach (var pr in p.ProcParameters.Where(par => !par.IsResult || !p.IsFunction))
-					p.ParameterBuilders.Add(() => string.Format("{0}{1} {2}", pr.IsOut || pr.IsResult ? pr.IsIn ? "ref " : "out " : "", pr.Type.ToTypeName(), pr.ParameterName));
+				foreach (var pr in p.ProcParameters.Where(par => !par.IsResult))
+					p.ParameterBuilders.Add(() => string.Format("{0}{1} {2}",
+						pr.IsOut ? pr.IsIn ? "ref " : "out " : "", pr.Type.ToTypeName(), pr.ParameterName));
 
 			if (p.IsTableFunction)
 			{
 				p.BodyBuilders.Add(() => new[]
 				{
-					string.Format("return {0}.GetTable<{1}>(this, (MethodInfo)MethodBase.GetCurrentMethod(){2}{3}", thisDataContext, p.ResultTable.TypeName, EnableNullableReferenceTypes ? "!" : "", p.ProcParameters.Count == 0 ? ");" : ",")
+					string.Format("return " + thisDataContext + ".GetTable<{0}>(this, (MethodInfo)MethodBase.GetCurrentMethod()", p.ResultTable.TypeName)
+					+ (p.ProcParameters.Count == 0 ? ");" : ",")
 				});
 
 				for (var idx = 0; idx < p.ProcParameters.Count; idx++)
@@ -807,19 +804,17 @@ void GenerateTypesFromMetadata()
 			{
 				var spName =
 					SqlBuilder.BuildTableName(
-						new StringBuilder(),
-						ServerName   == null ? null : (string)SqlBuilder.ConvertInline(ServerName,      LinqToDB.SqlProvider.ConvertType.NameToServer),
-						DatabaseName == null ? null : (string)SqlBuilder.ConvertInline(DatabaseName,    LinqToDB.SqlProvider.ConvertType.NameToDatabase),
-						p.Schema     == null ? null : (string)SqlBuilder.ConvertInline(p.Schema,        LinqToDB.SqlProvider.ConvertType.NameToSchema),
-													  (string)SqlBuilder.ConvertInline(p.ProcedureName, LinqToDB.SqlProvider.ConvertType.NameToQueryTable),
-						LinqToDB.TableOptions.NotSet
+						new System.Text.StringBuilder(),
+						(string)SqlBuilder.Convert(DatabaseName,    LinqToDB.SqlProvider.ConvertType.NameToDatabase),
+						(string)SqlBuilder.Convert(p.Schema,        LinqToDB.SqlProvider.ConvertType.NameToSchema),
+						(string)SqlBuilder.Convert(p.ProcedureName, LinqToDB.SqlProvider.ConvertType.NameToQueryTable)
 					).ToString();
 
 				spName = ToStringLiteral(spName);
 
-				var inputParameters      = p.ProcParameters.Where(pp => pp.IsIn).                            ToList();
-				var outputParameters     = p.ProcParameters.Where(pp => pp.IsOut || pp.IsResult).            ToList();
-				var inOrOutputParameters = p.ProcParameters.Where(pp => pp.IsIn  || pp.IsOut || pp.IsResult).ToList();
+				var inputParameters      = p.ProcParameters.Where(pp => pp.IsIn).            ToList();
+				var outputParameters     = p.ProcParameters.Where(pp => pp.IsOut).           ToList();
+				var inOrOutputParameters = p.ProcParameters.Where(pp => pp.IsIn || pp.IsOut).ToList();
 
 				spName += inOrOutputParameters.Count == 0
 					? (p.ResultTable == null || !GenerateProcedureResultAsList ? ");" : ").ToList();")
@@ -831,7 +826,7 @@ void GenerateTypesFromMetadata()
 				while (p.ProcParameters.Any(pp => pp.ParameterName == retName))
 					retName = "ret" + ++retNo;
 
-				var hasOut = outputParameters.Any(pr => pr.IsOut || pr.IsResult);
+				var hasOut = outputParameters.Any(pr => pr.IsOut);
 				var prefix = hasOut ? "var " + retName + " = " : "return ";
 
 				if (p.ResultTable == null)
@@ -855,16 +850,8 @@ void GenerateTypesFromMetadata()
 
 						foreach (var c in p.ResultTable.Columns.Values)
 						{
-							p.BodyBuilders.Add(() => new []
-							{
-								string.Format(
-									"\t\t{0}{1} = Converter.ChangeTypeTo<{2}>{3}(dataReader.GetValue({4}), ms),",
-									c.MemberName,
-									LenDiff(maxNameLen, c.MemberName),
-									c.BuildType(),
-									LenDiff(maxTypeLen, c.BuildType()),
-									n++)
-							});
+							p.BodyBuilders.Add(() => new [] {string.Format("\t\t{0}{1} = Converter.ChangeTypeTo<{2}>{3}(dataReader.GetValue({4}), ms),",
+								c.MemberName, LenDiff(maxNameLen, c.MemberName), c.BuildType(), LenDiff(maxTypeLen, c.BuildType()), n++) });
 						}
 
 						p.BodyBuilders.Add(() => new [] {"\t},", "\t" + spName });
@@ -877,7 +864,7 @@ void GenerateTypesFromMetadata()
 
 				var maxLenSchema = inputParameters.Max(pr => (int?)pr.SchemaName.   Length) ?? 0;
 				var maxLenParam  = inputParameters.Max(pr => (int?)pr.ParameterName.Length) ?? 0;
-				var maxLenType   = inputParameters.Max(pr => (int?)("LinqToDB.DataType." + pr.DataType).Length) ?? 0;
+				var maxLenType   = inputParameters.Max(pr => (int?)("DataType." + pr.DataType).Length) ?? 0;
 
 				for (var idx = 0; idx < inOrOutputParameters.Count; idx++)
 				{
@@ -887,20 +874,20 @@ void GenerateTypesFromMetadata()
 					p.BodyBuilders.Add(() =>
 					{
 						var str = string.Format(
-							!pr.IsIn && (pr.IsOut || pr.IsResult)
+							!pr.IsIn && pr.IsOut
 								? "\tnew DataParameter({0}, null, {3}{4})"
 								: "\tnew DataParameter({0}, {1}{2}, {3}{4})" + (GenerateProcedureDbType(pr) ? "{{ DbType = {5} }}" : null),
 							ToStringLiteral(pr.SchemaName),
 							LenDiff(maxLenSchema, pr.SchemaName),
 							pr.ParameterName,
 							LenDiff(maxLenParam, pr.ParameterName),
-							"LinqToDB.DataType." + pr.DataType,
+							"DataType." + pr.DataType,
 							ToStringLiteral(pr.SchemaType));
 
-						if (pr.IsOut || pr.IsResult)
+						if (pr.IsOut)
 						{
-							str += LenDiff(maxLenType, "LinqToDB.DataType." + pr.DataType);
-							str += " { Direction = " + (pr.IsIn ? "ParameterDirection.InputOutput" : (pr.IsResult ? "ParameterDirection.ReturnValue" : "ParameterDirection.Output"));
+							str += LenDiff(maxLenType, "DataType." + pr.DataType);
+							str += " { Direction = " + (pr.IsIn ? "ParameterDirection.InputOutput" : "ParameterDirection.Output");
 
 							if (pr.Size != null && pr.Size.Value != 0)
 								str += ", Size = " + pr.Size.Value;
@@ -909,7 +896,7 @@ void GenerateTypesFromMetadata()
 						}
 
 						// we need to call ToList(), because otherwise output parameters will not be updated
-						// with values. See https://docs.microsoft.com/en-us/previous-versions/dotnet/articles/ms971497(v=msdn.10)#capturing-the-gazoutas
+						// with values. See https://msdn.microsoft.com/en-us/library/ms971497#gazoutas_topic6
 						str += i + 1 == inOrOutputParameters.Count
 							? ((GenerateProcedureResultAsList || outputParameters.Count > 0) && p.ResultTable != null ? ").ToList();" : ");")
 							: ",";
@@ -926,19 +913,15 @@ void GenerateTypesFromMetadata()
 
 					p.BodyBuilders.Add(() => new [] { string.Empty });
 
-					foreach (var pr in p.ProcParameters.Where(_ => _.IsOut || _.IsResult))
+					foreach (var pr in p.ProcParameters.Where(_ => _.IsOut))
 					{
-						p.BodyBuilders.Add(() => new []
-						{
-							string.Format(
-								"{0} {1}= Converter.ChangeTypeTo<{2}>{3}(((IDbDataParameter)dataConnection.Command.Parameters[{4}]).{5}Value);",
-								pr.ParameterName,
-								LenDiff(maxLenParam,  pr.ParameterName),
-								pr.Type.ToTypeName(),
-								LenDiff(maxLenType, pr.Type.ToTypeName()),
-								ToStringLiteral(pr.SchemaName),
-								LenDiff(maxLenSchema, pr.SchemaName))
-						});
+						p.BodyBuilders.Add(() => new [] { string.Format("{0} {1}= Converter.ChangeTypeTo<{2}>{3}(((IDbDataParameter)dataConnection.Command.Parameters[{4}]).{5}Value);",
+							pr.ParameterName,
+							LenDiff(maxLenParam,  pr.ParameterName),
+							pr.Type.ToTypeName(),
+							LenDiff(maxLenType,   pr.Type.ToTypeName()),
+							ToStringLiteral(pr.SchemaName),
+							LenDiff(maxLenSchema, pr.SchemaName)) });
 					}
 
 					p.BodyBuilders.Add(() => new [] {"", "return " + retName + ";" });
@@ -1033,11 +1016,11 @@ void MakeMembersNamesUnique(IEnumerable<IClassMember> members, string defaultNam
 	LinqToDB.Common.Utils.MakeUniqueNames(
 		members,
 		reservedNames,
-		m => m is Table ? (((Table)m).Schema != null && (PrefixTableMappingForDefaultSchema || !((Table)m).IsDefaultSchema) && PrefixTableMappingWithSchema ? ((Table)m).Schema + "_" : null) + ((Table)m).Name : (m is TypeBase ? ((TypeBase)m).Name : ((MemberBase)m).Name),
-		(m, newName, _) =>
+		m => m is Table tbl ? (tbl.Schema != null && (PrefixTableMappingForDefaultSchema || !tbl.IsDefaultSchema) && PrefixTableMappingWithSchema ? tbl.Schema + "_" : null) + tbl.Name : (m is TypeBase t ? t.Name : ((MemberBase)m).Name),
+		(m, newName) =>
 		{
-			if (m is TypeBase)
-				((TypeBase)m).Name = newName;
+			if (m is TypeBase t)
+				t.Name = newName;
 			else
 				((MemberBase)m).Name = newName;
 		},
@@ -1048,40 +1031,21 @@ IEnumerable<IClassMember> GetAllClassMembers(IEnumerable<IClassMember> members, 
 {
 	foreach (var member in members)
 	{
-		if (member is MemberGroup)
-			foreach (var m in GetAllClassMembers(((MemberGroup)member).Members, exceptMethods))
+		if (member is MemberGroup mg)
+			foreach (var m in GetAllClassMembers(mg.Members, exceptMethods))
 				yield return m;
 		// constructors don't have own type/flag
-		else if (!(member is Method && (((Method)member).BuildType() == null || (exceptMethods != null && exceptMethods.Contains(((Method)member).Name)))))
+		else if (member is Method method && (method.BuildType() == null || (exceptMethods != null && exceptMethods.Contains(method.Name))))
+			continue;
+		else
 			yield return member;
 	}
 }
 
-// unused: left for backward API compatibility
-public string NormalizeStringName(string name)
+// left for backward compatibility
+string NormalizeStringName(string name)
 {
 	return ToStringLiteral(name);
-}
-
-List<string> CreateXmlCommentFromText(string text, string tag = "summary", string attributes = null)
-{
-	var comments = new List<string>();
-
-	if (!string.IsNullOrWhiteSpace(text))
-	{
-		comments.Add(string.Format("/ <{0}{1}>", tag, attributes == null ? null : " " + attributes));
-		foreach (var line in text.Split('\n'))
-			comments.Add("/ " + line
-				.Replace("&", "&amp;")
-				.Replace("<", "&lt;")
-				.Replace(">", "&gt;")
-				.Replace("\"", "&quot;")
-				.Replace("'", "&apos;")
-				.TrimEnd());
-		comments.Add(string.Format("/ </{0}>", tag));
-	}
-
-	return comments;
 }
 
 #>

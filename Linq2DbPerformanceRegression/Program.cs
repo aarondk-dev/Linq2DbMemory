@@ -19,7 +19,11 @@ namespace Linq2DbMemoryRegression
         {
             var summary = BenchmarkRunner.Run<MemoryUsage>();
             //var mem = new MemoryUsage();
-            //await mem.Large_UpdateStatement_With_Variable_Paramters();
+            //for (int i = 0; i < 200; i++)
+            //{
+            //    mem.Large_Compiled_UpdateStatement_With_Variable_Paramters();
+            //    Console.WriteLine(i);
+            //}
             Console.ReadLine();
         }
     }
@@ -31,6 +35,16 @@ namespace Linq2DbMemoryRegression
         readonly SqliteConnection connection = CreateConnection();
 
         public int VariableValue = 0;
+
+        readonly Func<DataConnection, string, string, string, decimal, decimal, int> compiledQuery 
+            = CompiledQuery.Compile<DataConnection, string, string, string,  decimal, decimal, int>((ctx, key, value1, value2, value3, value4) =>
+                 ctx.GetTable<TESTTABLE>()
+                 .Where(i => i.COLUMN1 == key)
+                 .Set(i => i.COLUMN2, value1)
+                 .Set(i => i.COLUMN12, value2)
+                 .Set(i => i.COLUMN15, value3)
+                 .Set(i => i.COLUMN16, value4)
+                 .Update());
 
         public static SqliteConnection CreateConnection()
         {
@@ -72,7 +86,7 @@ namespace Linq2DbMemoryRegression
             }
         }
 
-         [Benchmark]
+        [Benchmark]
         public async Task Small_UpdateStatement_With_Static_Parameters()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
@@ -158,6 +172,15 @@ namespace Linq2DbMemoryRegression
                 .UpdateAsync();
 
                 Query.ClearCaches();
+            }
+        }
+
+        [Benchmark]
+        public void Large_Compiled_UpdateStatement_With_Variable_Paramters()
+        {
+            using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
+            {
+                compiledQuery(dc, "61a018e7-6e43-44b7-ad53-5a55e626fbbe", "VALUE", "N", 3479583475, 3845793);
             }
         }
     }
