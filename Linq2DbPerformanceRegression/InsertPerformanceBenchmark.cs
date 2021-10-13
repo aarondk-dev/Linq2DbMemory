@@ -56,7 +56,7 @@ namespace Linq2DbMemoryRegression
         }
 
         [Benchmark]
-        public async Task Small_UpdateStatement_With_Variable_Parameters()
+        public async Task Small_InsertStatement_With_Variable_Parameters()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
             {
@@ -71,7 +71,7 @@ namespace Linq2DbMemoryRegression
         }
 
         [Benchmark]
-        public async Task Small_UpdateStatement_With_Static_Parameters()
+        public async Task Small_InsertStatement_With_Static_Parameters()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
             {
@@ -86,7 +86,7 @@ namespace Linq2DbMemoryRegression
         }
 
         [Benchmark]
-        public async Task Large_UpdateStatement_With_Variable_Paramters()
+        public async Task Large_InsertStatement_With_Variable_Parameters()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
             {
@@ -110,7 +110,7 @@ namespace Linq2DbMemoryRegression
         }
 
         [Benchmark]
-        public async Task Large_UpdateStatement_With_Static_Paramters()
+        public async Task Large_InsertStatement_With_Static_Parameters()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
             {
@@ -134,7 +134,7 @@ namespace Linq2DbMemoryRegression
         }
 
         [Benchmark]
-        public async Task Large_UpdateStatement_With_Variable_Paramters_With_ClearCaches()
+        public async Task Large_InsertStatement_With_Variable_Parameters_With_ClearCaches()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
             {
@@ -160,7 +160,7 @@ namespace Linq2DbMemoryRegression
         }
 
         [Benchmark]
-        public void Large_Compiled_UpdateStatement_With_Variable_Paramters()
+        public void Large_Compiled_InsertStatement_With_Variable_Parameters()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
             {
@@ -169,7 +169,7 @@ namespace Linq2DbMemoryRegression
         }
 
         [Benchmark]
-        public async Task Large__UpdateStatement_With_Variable_Paramters_Using_Expression_Overload()
+        public async Task Large__InsertStatement_With_Variable_Parameters_Using_Expression_Overload()
         {
             using (var dc = new DataConnection(new SQLiteDataProvider("Microsoft.Data.Sqlite"), connection))
             {
